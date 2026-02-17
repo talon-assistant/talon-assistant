@@ -1,0 +1,51 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+*.egg-info/
+dist/
+build/
+*.egg
+
+# Virtual environments
+venv/
+.venv/
+env/
+
+# IDE / tools
+.idea/
+.vscode/
+.claude/
+*.swp
+*.swo
+*~
+
+# User data & databases
+data/
+chroma_db/
+documents/
+
+# User config (use *.example.json as templates)
+config/settings.json
+config/hue_config.json
+config/talents.json
+
+# User-installed talents
+talents/user/*.py
+!talents/user/__init__.py
+
+# Marketplace cache
+marketplace/
+
+# OS files
+.DS_Store
+Thumbs.db
+Desktop.ini
+nul
+
+# Logs
+*.log
+
+# Legacy files
+jarvis_assistant.py

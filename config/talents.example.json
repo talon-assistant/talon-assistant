@@ -1,0 +1,26 @@
+{
+  "web_search": {
+    "enabled": true
+  },
+  "news": {
+    "enabled": true
+  },
+  "weather": {
+    "enabled": true
+  },
+  "hue_lights": {
+    "enabled": false
+  },
+  "desktop_control": {
+    "enabled": true
+  },
+  "reminder": {
+    "enabled": true
+  },
+  "email": {
+    "enabled": false
+  },
+  "notes": {
+    "enabled": true
+  }
+}

@@ -1,0 +1,625 @@
+/* Talon Light Theme - Catppuccin Latte Palette */
+
+/* Main window */
+QMainWindow {
+    background-color: #eff1f5;
+}
+
+QWidget {
+    background-color: #eff1f5;
+    color: #4c4f69;
+    font-family: "Segoe UI", sans-serif;
+    font-size: 13px;
+}
+
+/* Chat bubbles */
+#chat_bubble_user {
+    background-color: #ccd0da;
+    border-radius: 12px;
+    border: 1px solid #bcc0cc;
+    margin-left: 80px;
+    margin-right: 8px;
+}
+
+#chat_bubble_assistant {
+    background-color: #dce5f7;
+    border-radius: 12px;
+    border: 1px solid #b4c4e6;
+    margin-right: 80px;
+    margin-left: 8px;
+}
+
+#chat_bubble_error {
+    background-color: #f5dcdc;
+    border-radius: 12px;
+    border: 1px solid #d20f39;
+    margin-right: 80px;
+    margin-left: 8px;
+}
+
+#chat_bubble_system {
+    background-color: #e6e9ef;
+    border-radius: 12px;
+    border: 1px solid #ccd0da;
+    margin-left: 40px;
+    margin-right: 40px;
+}
+
+#bubble_role {
+    color: #1e66f5;
+    background: transparent;
+}
+
+#bubble_text {
+    color: #4c4f69;
+    background: transparent;
+}
+
+/* Text input */
+QLineEdit {
+    background-color: #ccd0da;
+    color: #4c4f69;
+    border: 1px solid #bcc0cc;
+    border-radius: 8px;
+    padding: 8px 12px;
+    font-size: 14px;
+}
+
+QLineEdit:focus {
+    border-color: #1e66f5;
+}
+
+QLineEdit:disabled {
+    background-color: #e6e9ef;
+    color: #9ca0b0;
+}
+
+/* Buttons */
+QPushButton {
+    background-color: #bcc0cc;
+    color: #4c4f69;
+    border: none;
+    border-radius: 6px;
+    padding: 8px 16px;
+}
+
+QPushButton:hover {
+    background-color: #acb0be;
+}
+
+QPushButton:pressed {
+    background-color: #1e66f5;
+    color: #eff1f5;
+}
+
+QPushButton:checked {
+    background-color: #40a02b;
+    color: #eff1f5;
+}
+
+QPushButton:disabled {
+    background-color: #ccd0da;
+    color: #9ca0b0;
+}
+
+/* Talent sidebar */
+#sidebar_header {
+    font-size: 16px;
+    font-weight: bold;
+    color: #1e66f5;
+    padding: 12px 8px;
+    background: transparent;
+}
+
+#talent_item {
+    background-color: #e6e9ef;
+    border-radius: 8px;
+    border: 1px solid #ccd0da;
+    margin: 2px 4px;
+}
+
+#talent_item_active {
+    background-color: #dce5f7;
+    border-radius: 8px;
+    border: 1px solid #1e66f5;
+    margin: 2px 4px;
+}
+
+#talent_description {
+    color: #6c6f85;
+    font-size: 11px;
+    background: transparent;
+}
+
+#talent_keywords {
+    color: #9ca0b0;
+    font-size: 10px;
+    background: transparent;
+}
+
+/* Checkboxes */
+QCheckBox {
+    color: #4c4f69;
+    spacing: 8px;
+    background: transparent;
+}
+
+QCheckBox::indicator {
+    width: 16px;
+    height: 16px;
+    border-radius: 4px;
+    border: 2px solid #bcc0cc;
+    background-color: #ccd0da;
+}
+
+QCheckBox::indicator:checked {
+    background-color: #40a02b;
+    border-color: #40a02b;
+}
+
+/* Progress bar (mic level) */
+QProgressBar {
+    background-color: #ccd0da;
+    border: none;
+    border-radius: 4px;
+    text-align: center;
+}
+
+QProgressBar::chunk {
+    background-color: #40a02b;
+    border-radius: 4px;
+}
+
+/* Activity log */
+#activity_log_text {
+    background-color: #dce0e8;
+    color: #6c6f85;
+    font-family: "Cascadia Code", "Consolas", monospace;
+    font-size: 12px;
+    border: 1px solid #ccd0da;
+    border-radius: 4px;
+}
+
+#log_toggle {
+    background: transparent;
+    color: #1e66f5;
+    font-weight: bold;
+    text-align: left;
+    padding: 4px 8px;
+}
+
+#log_toggle:hover {
+    color: #7287fd;
+}
+
+/* Status bar indicators */
+#status_llm_connected { color: #40a02b; background: transparent; }
+#status_llm_disconnected { color: #d20f39; background: transparent; }
+#status_llm_unknown { color: #df8e1d; background: transparent; }
+#status_voice_listening { color: #40a02b; background: transparent; }
+#status_voice_recording_command { color: #ea76cb; background: transparent; }
+#status_voice_transcribing { color: #df8e1d; background: transparent; }
+#status_voice_off { color: #9ca0b0; background: transparent; }
+#status_idle { color: #9ca0b0; background: transparent; }
+#status_initializing { color: #1e66f5; background: transparent; }
+#status_processing { color: #df8e1d; background: transparent; }
+#status_speaking { color: #8839ef; background: transparent; }
+#status_separator { color: #bcc0cc; background: transparent; }
+
+/* Voice panel */
+#voice_panel {
+    background-color: #e6e9ef;
+    border-top: 1px solid #ccd0da;
+}
+
+/* Wake word indicator */
+#wake_indicator_off {
+    background-color: #bcc0cc;
+    border-radius: 8px;
+}
+
+#wake_indicator_on {
+    background-color: #40a02b;
+    border-radius: 8px;
+}
+
+/* Scrollbars */
+QScrollBar:vertical {
+    background-color: #eff1f5;
+    width: 8px;
+    margin: 0;
+}
+
+QScrollBar::handle:vertical {
+    background-color: #bcc0cc;
+    border-radius: 4px;
+    min-height: 30px;
+}
+
+QScrollBar::handle:vertical:hover {
+    background-color: #acb0be;
+}
+
+QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {
+    height: 0;
+}
+
+QScrollBar:horizontal {
+    background-color: #eff1f5;
+    height: 8px;
+    margin: 0;
+}
+
+QScrollBar::handle:horizontal {
+    background-color: #bcc0cc;
+    border-radius: 4px;
+    min-width: 30px;
+}
+
+QScrollBar::handle:horizontal:hover {
+    background-color: #acb0be;
+}
+
+QScrollBar::add-line:horizontal, QScrollBar::sub-line:horizontal {
+    width: 0;
+}
+
+/* Splitter handles */
+QSplitter::handle {
+    background-color: #ccd0da;
+}
+
+QSplitter::handle:horizontal {
+    width: 2px;
+}
+
+QSplitter::handle:vertical {
+    height: 2px;
+}
+
+/* Menu bar */
+QMenuBar {
+    background-color: #e6e9ef;
+    color: #4c4f69;
+    border-bottom: 1px solid #ccd0da;
+}
+
+QMenuBar::item:selected {
+    background-color: #ccd0da;
+}
+
+QMenu {
+    background-color: #eff1f5;
+    color: #4c4f69;
+    border: 1px solid #ccd0da;
+}
+
+QMenu::item:selected {
+    background-color: #ccd0da;
+}
+
+/* Status bar */
+QStatusBar {
+    background-color: #e6e9ef;
+    color: #4c4f69;
+    border-top: 1px solid #ccd0da;
+}
+
+/* Dialogs */
+QDialog {
+    background-color: #eff1f5;
+    color: #4c4f69;
+}
+
+QTabWidget::pane {
+    background-color: #eff1f5;
+    border: 1px solid #ccd0da;
+    border-radius: 4px;
+}
+
+QTabBar::tab {
+    background-color: #e6e9ef;
+    color: #6c6f85;
+    padding: 8px 16px;
+    border: 1px solid #ccd0da;
+    border-bottom: none;
+    border-top-left-radius: 6px;
+    border-top-right-radius: 6px;
+    margin-right: 2px;
+}
+
+QTabBar::tab:selected {
+    background-color: #eff1f5;
+    color: #1e66f5;
+    border-bottom: 2px solid #1e66f5;
+}
+
+QTabBar::tab:hover {
+    background-color: #ccd0da;
+}
+
+QSpinBox, QDoubleSpinBox, QComboBox {
+    background-color: #ccd0da;
+    color: #4c4f69;
+    border: 1px solid #bcc0cc;
+    border-radius: 6px;
+    padding: 4px 8px;
+}
+
+QSpinBox:focus, QDoubleSpinBox:focus, QComboBox:focus {
+    border-color: #1e66f5;
+}
+
+QComboBox::drop-down {
+    border: none;
+    padding-right: 8px;
+}
+
+QComboBox QAbstractItemView {
+    background-color: #ccd0da;
+    color: #4c4f69;
+    selection-background-color: #bcc0cc;
+    border: 1px solid #bcc0cc;
+}
+
+QListWidget {
+    background-color: #ccd0da;
+    color: #4c4f69;
+    border: 1px solid #bcc0cc;
+    border-radius: 6px;
+}
+
+QListWidget::item:selected {
+    background-color: #bcc0cc;
+    color: #4c4f69;
+}
+
+QLabel#restart_warning {
+    color: #fe640b;
+    font-style: italic;
+    background: transparent;
+}
+
+/* Talent gear (configure) button */
+#talent_gear_btn {
+    background: transparent;
+    color: #8c8fa1;
+    border: none;
+    font-size: 15px;
+    padding: 0px;
+}
+
+#talent_gear_btn:hover {
+    color: #1e66f5;
+}
+
+/* Talent config dialog */
+#talent_config_header {
+    font-size: 15px;
+    color: #1e66f5;
+    background: transparent;
+    padding: 4px 0px;
+}
+
+#talent_config_save_btn {
+    background-color: #1e66f5;
+    color: #eff1f5;
+    border: none;
+    border-radius: 6px;
+    padding: 6px 16px;
+    font-weight: bold;
+}
+
+#talent_config_save_btn:hover {
+    background-color: #2a7ae8;
+}
+
+/* Import talent button */
+#import_talent_button {
+    background-color: #ccd0da;
+    color: #1e66f5;
+    border: 1px dashed #bcc0cc;
+    border-radius: 6px;
+    padding: 8px;
+    margin: 4px;
+}
+
+#import_talent_button:hover {
+    background-color: #bcc0cc;
+    border-color: #1e66f5;
+}
+
+#talent_validation_success {
+    color: #40a02b;
+    background: transparent;
+}
+
+#talent_validation_error {
+    color: #d20f39;
+    background: transparent;
+}
+
+#talent_info_panel {
+    background-color: #e6e9ef;
+    border: 1px solid #ccd0da;
+    border-radius: 8px;
+    padding: 12px;
+}
+
+/* Chat history dialog */
+#chat_history_list {
+    background-color: #e6e9ef;
+    border: 1px solid #ccd0da;
+    border-radius: 6px;
+}
+
+#chat_history_list::item {
+    padding: 8px;
+    border-bottom: 1px solid #ccd0da;
+}
+
+#chat_history_list::item:selected {
+    background-color: #ccd0da;
+    color: #1e66f5;
+}
+
+#chat_preview_pane {
+    background-color: #eff1f5;
+    color: #6c6f85;
+    border: 1px solid #ccd0da;
+    border-radius: 6px;
+    padding: 8px;
+}
+
+/* Marketplace sidebar button */
+#marketplace_sidebar_btn {
+    background-color: #1e66f5;
+    color: #eff1f5;
+    border: none;
+    border-radius: 6px;
+    padding: 8px;
+    margin: 4px;
+    font-weight: bold;
+}
+
+#marketplace_sidebar_btn:hover {
+    background-color: #2a7ae8;
+}
+
+/* Marketplace dialog */
+#marketplace_header {
+    font-size: 16px;
+    font-weight: bold;
+    color: #1e66f5;
+    background: transparent;
+    padding: 4px 0px;
+}
+
+#marketplace_search {
+    background-color: #ccd0da;
+    color: #4c4f69;
+    border: 1px solid #bcc0cc;
+    border-radius: 8px;
+    padding: 6px 10px;
+}
+
+#marketplace_search:focus {
+    border-color: #1e66f5;
+}
+
+#marketplace_refresh_btn {
+    background-color: #bcc0cc;
+    color: #4c4f69;
+    border: none;
+    border-radius: 6px;
+    padding: 6px 14px;
+}
+
+#marketplace_refresh_btn:hover {
+    background-color: #acb0be;
+}
+
+#marketplace_status {
+    color: #6c6f85;
+    font-size: 11px;
+    background: transparent;
+    padding: 2px 4px;
+}
+
+/* Marketplace talent cards */
+#marketplace_card {
+    background-color: #e6e9ef;
+    border: 1px solid #ccd0da;
+    border-radius: 10px;
+}
+
+#marketplace_card:hover {
+    border-color: #acb0be;
+}
+
+#marketplace_card_title {
+    color: #4c4f69;
+    font-weight: bold;
+    background: transparent;
+}
+
+#marketplace_card_category {
+    background-color: #ccd0da;
+    color: #1e66f5;
+    border-radius: 8px;
+    padding: 2px 8px;
+    font-size: 10px;
+}
+
+#marketplace_card_desc {
+    color: #6c6f85;
+    font-size: 11px;
+    background: transparent;
+}
+
+#marketplace_card_author {
+    color: #8c8fa1;
+    font-size: 10px;
+    background: transparent;
+}
+
+#marketplace_card_version {
+    color: #8c8fa1;
+    font-size: 10px;
+    background: transparent;
+}
+
+#marketplace_install_btn {
+    background-color: #40a02b;
+    color: #eff1f5;
+    border: none;
+    border-radius: 6px;
+    padding: 4px 12px;
+    font-weight: bold;
+}
+
+#marketplace_install_btn:hover {
+    background-color: #2d9418;
+}
+
+#marketplace_install_btn:disabled {
+    background-color: #ccd0da;
+    color: #9ca0b0;
+}
+
+#marketplace_remove_btn {
+    background-color: #d20f39;
+    color: #eff1f5;
+    border: none;
+    border-radius: 6px;
+    padding: 4px 12px;
+    font-weight: bold;
+}
+
+#marketplace_remove_btn:hover {
+    background-color: #e01b45;
+}
+
+#marketplace_remove_btn:disabled {
+    background-color: #ccd0da;
+    color: #9ca0b0;
+}
+
+/* Slider (font size) */
+QSlider::groove:horizontal {
+    background-color: #ccd0da;
+    height: 6px;
+    border-radius: 3px;
+}
+
+QSlider::handle:horizontal {
+    background-color: #1e66f5;
+    width: 16px;
+    height: 16px;
+    margin: -5px 0;
+    border-radius: 8px;
+}
+
+QSlider::handle:horizontal:hover {
+    background-color: #7287fd;
+}

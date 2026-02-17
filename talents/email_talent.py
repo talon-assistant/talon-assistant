@@ -1,0 +1,521 @@
+"""EmailTalent — check, read, and send email via IMAP/SMTP.
+
+Uses stdlib imaplib + smtplib (no third-party mail libraries).
+Credentials are stored via the `keyring` library when available,
+falling back to plaintext config with a console warning.
+
+Examples:
+    "check my email"
+    "read latest email from John"
+    "how many unread emails do I have"
+    "send email to john@example.com about the meeting"
+"""
+
+import re
+import json
+import imaplib
+import smtplib
+import email
+from email.mime.text import MIMEText
+from email.mime.multipart import MIMEMultipart
+from email.header import decode_header
+from datetime import datetime
+from talents.base import BaseTalent
+
+# Optional: keyring for secure credential storage
+try:
+    import keyring
+    _HAS_KEYRING = True
+except ImportError:
+    _HAS_KEYRING = False
+
+_KEYRING_SERVICE = "talon_email"
+
+
+class EmailTalent(BaseTalent):
+    name = "email"
+    description = "Check, read, and send email via IMAP/SMTP"
+    keywords = [
+        "email", "mail", "inbox", "unread", "send email",
+        "compose", "check email", "read email", "new email",
+        "send a message", "send message to",
+    ]
+    priority = 55
+
+    _EMAIL_PHRASES = [
+        "email", "mail", "inbox", "unread",
+        "send email", "compose email", "send a message",
+        "check email", "check my email", "read email",
+        "new email", "latest email", "read my mail",
+    ]
+
+    # Phrases that indicate OTHER talents — defer
+    _DESKTOP_PHRASES = [
+        "open ", "launch ", "start ", "browse to", "go to",
+    ]
+
+    _SYSTEM_PROMPT_READ = (
+        "You are an email summarizer. "
+        "Using ONLY the email data provided, give a concise summary. "
+        "Include sender name, subject, and a 1-2 sentence summary of the body. "
+        "Do NOT add information not in the data."
+    )
+
+    _SYSTEM_PROMPT_COMPOSE = (
+        "You are an email composition assistant. "
+        "Given the user's request, generate ONLY a JSON object with these keys:\n"
+        '  "to": email address (string)\n'
+        '  "subject": email subject line (string)\n'
+        '  "body": email body text (string)\n'
+        "\n"
+        "Write the body in a professional, friendly tone unless the user specifies otherwise. "
+        "Keep it concise. Return ONLY the JSON object, no markdown, no explanation."
+    )
+
+    def __init__(self):
+        super().__init__()
+        self._imap = None
+        self._connected = False
+
+    # ── Config schema ──────────────────────────────────────────────
+
+    def get_config_schema(self) -> dict:
+        return {
+            "fields": [
+                {"key": "imap_server", "label": "IMAP Server",
+                 "type": "string", "default": ""},
+                {"key": "imap_port", "label": "IMAP Port",
+                 "type": "int", "default": 993, "min": 1, "max": 65535},
+                {"key": "smtp_server", "label": "SMTP Server",
+                 "type": "string", "default": ""},
+                {"key": "smtp_port", "label": "SMTP Port",
+                 "type": "int", "default": 587, "min": 1, "max": 65535},
+                {"key": "username", "label": "Email Address",
+                 "type": "string", "default": ""},
+                {"key": "password", "label": "Password / App Password",
+                 "type": "password", "default": ""},
+                {"key": "max_fetch", "label": "Max Emails to Fetch",
+                 "type": "int", "default": 5, "min": 1, "max": 50},
+            ]
+        }
+
+    def update_config(self, config: dict) -> None:
+        """Store config and persist password to keyring if available."""
+        password = config.get("password", "")
+        username = config.get("username", "")
+
+        # Save password to keyring, remove from plaintext config
+        if _HAS_KEYRING and password and username:
+            try:
+                keyring.set_password(_KEYRING_SERVICE, username, password)
+                config = dict(config)  # copy so we don't mutate
+                config["password"] = ""  # don't persist in talents.json
+                print("   [Email] Password saved to system keyring")
+            except Exception as e:
+                print(f"   [Email] Keyring save failed ({e}), password in config")
+
+        self._config = config
+        # Force reconnect next time
+        self._disconnect()
+
+    # ── Routing ────────────────────────────────────────────────────
+
+    def can_handle(self, command: str) -> bool:
+        cmd = command.lower()
+        # Defer desktop actions
+        if any(phrase in cmd for phrase in self._DESKTOP_PHRASES):
+            return False
+        return any(phrase in cmd for phrase in self._EMAIL_PHRASES)
+
+    # ── Execution ──────────────────────────────────────────────────
+
+    def execute(self, command: str, context: dict) -> dict:
+        cmd_lower = command.lower()
+
+        # Check if email is configured
+        if not self._config.get("imap_server") or not self._config.get("username"):
+            return {
+                "success": False,
+                "response": "Email is not configured yet. Please set up your IMAP/SMTP "
+                            "settings in the email talent configuration (click the gear icon).",
+                "actions_taken": [{"action": "email_not_configured"}],
+                "spoken": False,
+            }
+
+        # Route to the right sub-command
+        if any(w in cmd_lower for w in ["send", "compose", "write"]):
+            return self._handle_send(command, context)
+        elif any(w in cmd_lower for w in ["read", "latest", "last", "recent", "from"]):
+            return self._handle_read(command, context)
+        else:
+            # Default: check inbox (unread count + summaries)
+            return self._handle_check(command, context)
+
+    # ── Check inbox ────────────────────────────────────────────────
+
+    def _handle_check(self, command, context):
+        """Show unread count and brief summaries of recent emails."""
+        try:
+            imap = self._connect_imap()
+            imap.select("INBOX", readonly=True)
+
+            # Get unread count
+            status, data = imap.search(None, "UNSEEN")
+            unread_ids = data[0].split() if data[0] else []
+            unread_count = len(unread_ids)
+
+            max_fetch = self._config.get("max_fetch", 5)
+
+            # Fetch the most recent unread (or all recent if few unread)
+            if unread_ids:
+                fetch_ids = unread_ids[-max_fetch:]
+            else:
+                # No unread — show most recent
+                status, data = imap.search(None, "ALL")
+                all_ids = data[0].split() if data[0] else []
+                fetch_ids = all_ids[-max_fetch:] if all_ids else []
+
+            if not fetch_ids:
+                self._disconnect()
+                return {
+                    "success": True,
+                    "response": "Your inbox is empty.",
+                    "actions_taken": [{"action": "email_check", "unread": 0}],
+                    "spoken": False,
+                }
+
+            summaries = self._fetch_summaries(imap, fetch_ids)
+            self._disconnect()
+
+            # Build response
+            header = f"You have {unread_count} unread email{'s' if unread_count != 1 else ''}.\n"
+            if summaries:
+                header += f"\nHere are the {'unread' if unread_ids else 'most recent'} messages:\n\n"
+                for i, s in enumerate(summaries, 1):
+                    header += f"{i}. From: {s['from']}\n   Subject: {s['subject']}\n   Date: {s['date']}\n\n"
+
+            return {
+                "success": True,
+                "response": header.strip(),
+                "actions_taken": [{"action": "email_check", "unread": unread_count}],
+                "spoken": False,
+            }
+
+        except Exception as e:
+            self._disconnect()
+            return {
+                "success": False,
+                "response": f"Error checking email: {str(e)}",
+                "actions_taken": [{"action": "email_check_error"}],
+                "spoken": False,
+            }
+
+    # ── Read specific email ────────────────────────────────────────
+
+    def _handle_read(self, command, context):
+        """Read and summarize a specific email (e.g., "read latest email from John")."""
+        try:
+            imap = self._connect_imap()
+            imap.select("INBOX", readonly=True)
+
+            # Try to extract a sender filter
+            sender_filter = self._extract_sender(command)
+            max_fetch = self._config.get("max_fetch", 5)
+
+            if sender_filter:
+                # Search by sender
+                status, data = imap.search(None, f'FROM "{sender_filter}"')
+            else:
+                status, data = imap.search(None, "ALL")
+
+            msg_ids = data[0].split() if data[0] else []
+
+            if not msg_ids:
+                self._disconnect()
+                who = f" from '{sender_filter}'" if sender_filter else ""
+                return {
+                    "success": True,
+                    "response": f"No emails found{who}.",
+                    "actions_taken": [{"action": "email_read", "filter": sender_filter}],
+                    "spoken": False,
+                }
+
+            # Fetch the latest matching email(s)
+            fetch_ids = msg_ids[-min(max_fetch, len(msg_ids)):]
+            details = self._fetch_full_emails(imap, fetch_ids[-1:])  # just the latest
+            self._disconnect()
+
+            if not details:
+                return {
+                    "success": False,
+                    "response": "Couldn't read the email content.",
+                    "actions_taken": [{"action": "email_read_error"}],
+                    "spoken": False,
+                }
+
+            # Use LLM to summarize
+            email_data = details[0]
+            llm = context.get("llm")
+            if llm:
+                user_msg = (
+                    f"=== EMAIL ===\n"
+                    f"From: {email_data['from']}\n"
+                    f"Subject: {email_data['subject']}\n"
+                    f"Date: {email_data['date']}\n"
+                    f"Body:\n{email_data['body'][:2000]}\n"
+                    f"=== END EMAIL ===\n\n"
+                    f"User asked: {command}\n\n"
+                    f"Summarize this email concisely."
+                )
+                response = llm.generate(
+                    user_msg,
+                    system_prompt=self._SYSTEM_PROMPT_READ,
+                    temperature=0.3,
+                )
+            else:
+                response = (
+                    f"From: {email_data['from']}\n"
+                    f"Subject: {email_data['subject']}\n"
+                    f"Date: {email_data['date']}\n\n"
+                    f"{email_data['body'][:500]}"
+                )
+
+            return {
+                "success": True,
+                "response": response,
+                "actions_taken": [{"action": "email_read", "subject": email_data["subject"]}],
+                "spoken": False,
+            }
+
+        except Exception as e:
+            self._disconnect()
+            return {
+                "success": False,
+                "response": f"Error reading email: {str(e)}",
+                "actions_taken": [{"action": "email_read_error"}],
+                "spoken": False,
+            }
+
+    # ── Send email ─────────────────────────────────────────────────
+
+    def _handle_send(self, command, context):
+        """Compose and send an email using LLM for drafting."""
+        llm = context.get("llm")
+        if not llm:
+            return {
+                "success": False,
+                "response": "LLM not available for composing email.",
+                "actions_taken": [],
+                "spoken": False,
+            }
+
+        # Use LLM to extract to/subject/body
+        response = llm.generate(
+            f"Compose an email based on this request:\n\n{command}",
+            system_prompt=self._SYSTEM_PROMPT_COMPOSE,
+            temperature=0.3,
+        )
+
+        # Parse JSON
+        composed = None
+        try:
+            json_match = re.search(r'\{[^}]+\}', response, re.DOTALL)
+            if json_match:
+                composed = json.loads(json_match.group())
+        except (json.JSONDecodeError, AttributeError):
+            pass
+
+        if not composed or "to" not in composed:
+            return {
+                "success": False,
+                "response": "I couldn't figure out who to send the email to. "
+                            "Try: 'send email to user@example.com about ...'",
+                "actions_taken": [{"action": "email_compose_fail"}],
+                "spoken": False,
+            }
+
+        # Actually send
+        try:
+            self._send_smtp(
+                to_addr=composed["to"],
+                subject=composed.get("subject", "No Subject"),
+                body=composed.get("body", ""),
+            )
+
+            return {
+                "success": True,
+                "response": f"Email sent to {composed['to']}!\n"
+                            f"Subject: {composed.get('subject', 'No Subject')}",
+                "actions_taken": [{"action": "email_send", "to": composed["to"],
+                                   "subject": composed.get("subject", "")}],
+                "spoken": False,
+            }
+
+        except Exception as e:
+            return {
+                "success": False,
+                "response": f"Failed to send email: {str(e)}",
+                "actions_taken": [{"action": "email_send_error"}],
+                "spoken": False,
+            }
+
+    # ── IMAP helpers ───────────────────────────────────────────────
+
+    def _get_password(self):
+        """Retrieve password from keyring or config."""
+        username = self._config.get("username", "")
+        # Try keyring first
+        if _HAS_KEYRING and username:
+            try:
+                pw = keyring.get_password(_KEYRING_SERVICE, username)
+                if pw:
+                    return pw
+            except Exception:
+                pass
+        # Fall back to config
+        return self._config.get("password", "")
+
+    def _connect_imap(self):
+        """Connect to IMAP server and login."""
+        server = self._config["imap_server"]
+        port = self._config.get("imap_port", 993)
+        username = self._config["username"]
+        password = self._get_password()
+
+        if not password:
+            raise ValueError("No email password configured. Use the gear icon to set it.")
+
+        print(f"   [Email] Connecting to IMAP {server}:{port}...")
+        imap = imaplib.IMAP4_SSL(server, port)
+        imap.login(username, password)
+        self._imap = imap
+        self._connected = True
+        print(f"   [Email] IMAP connected!")
+        return imap
+
+    def _disconnect(self):
+        """Close IMAP connection."""
+        if self._imap:
+            try:
+                self._imap.close()
+            except Exception:
+                pass
+            try:
+                self._imap.logout()
+            except Exception:
+                pass
+            self._imap = None
+            self._connected = False
+
+    def _fetch_summaries(self, imap, msg_ids):
+        """Fetch brief headers (from, subject, date) for given message IDs."""
+        summaries = []
+        for mid in msg_ids:
+            try:
+                status, data = imap.fetch(mid, "(RFC822.HEADER)")
+                if status != "OK":
+                    continue
+                raw_header = data[0][1]
+                msg = email.message_from_bytes(raw_header)
+                summaries.append({
+                    "from": self._decode_header(msg.get("From", "Unknown")),
+                    "subject": self._decode_header(msg.get("Subject", "(no subject)")),
+                    "date": msg.get("Date", "Unknown"),
+                })
+            except Exception as e:
+                print(f"   [Email] Error fetching summary: {e}")
+                continue
+        return summaries
+
+    def _fetch_full_emails(self, imap, msg_ids):
+        """Fetch full email content for given message IDs."""
+        emails = []
+        for mid in msg_ids:
+            try:
+                status, data = imap.fetch(mid, "(RFC822)")
+                if status != "OK":
+                    continue
+                raw = data[0][1]
+                msg = email.message_from_bytes(raw)
+
+                body = ""
+                if msg.is_multipart():
+                    for part in msg.walk():
+                        ct = part.get_content_type()
+                        if ct == "text/plain":
+                            payload = part.get_payload(decode=True)
+                            if payload:
+                                body = payload.decode("utf-8", errors="replace")
+                                break
+                else:
+                    payload = msg.get_payload(decode=True)
+                    if payload:
+                        body = payload.decode("utf-8", errors="replace")
+
+                emails.append({
+                    "from": self._decode_header(msg.get("From", "Unknown")),
+                    "subject": self._decode_header(msg.get("Subject", "(no subject)")),
+                    "date": msg.get("Date", "Unknown"),
+                    "body": body,
+                })
+            except Exception as e:
+                print(f"   [Email] Error fetching email: {e}")
+                continue
+        return emails
+
+    @staticmethod
+    def _decode_header(value):
+        """Decode an email header that may be encoded (e.g., =?UTF-8?Q?...)."""
+        if not value:
+            return ""
+        parts = decode_header(value)
+        decoded = []
+        for part, charset in parts:
+            if isinstance(part, bytes):
+                decoded.append(part.decode(charset or "utf-8", errors="replace"))
+            else:
+                decoded.append(part)
+        return " ".join(decoded)
+
+    def _extract_sender(self, command):
+        """Extract a sender name or email from the command."""
+        cmd = command.lower()
+        # "from <name>" pattern
+        match = re.search(r'from\s+([a-z0-9@._\- ]+)', cmd)
+        if match:
+            sender = match.group(1).strip()
+            # Remove trailing noise words
+            for noise in ["about", "regarding", "the", "today", "this"]:
+                sender = re.sub(rf'\s+{noise}.*$', '', sender)
+            return sender.strip()
+        return ""
+
+    # ── SMTP helpers ───────────────────────────────────────────────
+
+    def _send_smtp(self, to_addr, subject, body):
+        """Send an email via SMTP (STARTTLS)."""
+        server = self._config.get("smtp_server", "")
+        port = self._config.get("smtp_port", 587)
+        username = self._config["username"]
+        password = self._get_password()
+
+        if not server:
+            raise ValueError("SMTP server not configured.")
+        if not password:
+            raise ValueError("No email password configured.")
+
+        msg = MIMEMultipart()
+        msg["From"] = username
+        msg["To"] = to_addr
+        msg["Subject"] = subject
+        msg.attach(MIMEText(body, "plain"))
+
+        print(f"   [Email] Sending via SMTP {server}:{port} to {to_addr}...")
+        with smtplib.SMTP(server, port) as smtp:
+            smtp.ehlo()
+            smtp.starttls()
+            smtp.ehlo()
+            smtp.login(username, password)
+            smtp.send_message(msg)
+
+        print(f"   [Email] Sent!")

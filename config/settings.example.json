@@ -1,0 +1,60 @@
+{
+  "llm": {
+    "endpoint": "http://localhost:5001/api/v1/generate",
+    "max_length": 512,
+    "temperature": 0.7,
+    "top_p": 0.9,
+    "rep_pen": 1.1,
+    "timeout": 120,
+    "stop_sequences": ["<|im_end|>", "<|endoftext|>"],
+    "prompt_template": {
+      "user_prefix": "<|im_start|>user\n",
+      "user_suffix": "<|im_end|>",
+      "assistant_prefix": "\n<|im_start|>assistant\n",
+      "vision_prefix": "<|vision_start|><|image_pad|><|vision_end|>"
+    }
+  },
+  "audio": {
+    "sample_rate": 16000,
+    "chunk_duration": 3,
+    "command_duration": 5,
+    "energy_threshold": 100,
+    "variance_threshold": 1000,
+    "noise_words": ["you", "thank you", "thanks"]
+  },
+  "voice": {
+    "tts_voice": "en-US-AriaNeural",
+    "wake_words": ["okay talon", "ok talon", "talon", "hey talon"]
+  },
+  "whisper": {
+    "model_size": "small",
+    "preferred_device": "cuda",
+    "preferred_compute_type": "float16",
+    "fallback_device": "cpu",
+    "fallback_compute_type": "int8",
+    "language": "en"
+  },
+  "memory": {
+    "db_path": "data/talon_memory.db",
+    "chroma_path": "data/chroma_db",
+    "embedding_model": "all-MiniLM-L6-v2"
+  },
+  "documents": {
+    "directory": "documents"
+  },
+  "desktop": {
+    "pyautogui_pause": 0.5,
+    "pyautogui_failsafe": true,
+    "action_delay": 0.5,
+    "app_launch_delay": 2
+  },
+  "appearance": {
+    "theme": "dark",
+    "font_size": 13
+  },
+  "system_tray": {
+    "minimize_to_tray": true,
+    "show_notifications": true,
+    "global_hotkey": "ctrl+shift+j"
+  }
+}
