@@ -14,12 +14,14 @@ class TalentConfigDialog(QDialog):
 
     config_saved = pyqtSignal(str, dict)  # (talent_name, config_dict)
 
-    def __init__(self, talent_name, display_name, schema, current_config, parent=None):
+    def __init__(self, talent_name, display_name, schema, current_config,
+                 parent=None, credential_store=None):
         super().__init__(parent)
         self.talent_name = talent_name
         self._fields = {}  # key -> (kind, widget)
         self._schema = schema
         self._current = current_config or {}
+        self._credential_store = credential_store
 
         self.setWindowTitle(f"Configure \u2014 {display_name}")
         self.setMinimumWidth(420)
@@ -77,8 +79,18 @@ class TalentConfigDialog(QDialog):
             form.addRow(label, widget)
 
         elif ftype == "password":
+            # Check if a keyring secret exists for this field
+            has_keyring_secret = False
+            if self._credential_store and not value:
+                has_keyring_secret = self._credential_store.has_secret(
+                    self.talent_name, key)
+
             widget = QLineEdit(str(value))
             widget.setEchoMode(QLineEdit.EchoMode.Password)
+
+            if has_keyring_secret and not value:
+                widget.setPlaceholderText("(stored in system keyring)")
+
             # Add show/hide toggle
             container = QHBoxLayout()
             container.setContentsMargins(0, 0, 0, 0)
@@ -91,7 +103,7 @@ class TalentConfigDialog(QDialog):
                     QLineEdit.EchoMode.Normal if checked
                     else QLineEdit.EchoMode.Password))
             container.addWidget(toggle_btn)
-            self._fields[key] = ("line", widget)
+            self._fields[key] = ("password", widget)
             form.addRow(label, container)
 
         elif ftype == "int":
@@ -138,11 +150,25 @@ class TalentConfigDialog(QDialog):
             form.addRow(label, widget)
 
     def _collect_values(self):
-        """Read all widget values into a flat config dict."""
+        """Read all widget values into a flat config dict.
+
+        For password fields: if the user left the field empty and a keyring
+        secret already exists, we pull the real value so the bridge doesn't
+        interpret an empty string as "delete the credential".
+        """
         result = {}
         for key, (kind, widget) in self._fields.items():
             if kind == "line":
                 result[key] = widget.text()
+            elif kind == "password":
+                text = widget.text()
+                if not text and self._credential_store:
+                    # Preserve existing keyring secret when field left blank
+                    existing = self._credential_store.get_secret(
+                        self.talent_name, key)
+                    result[key] = existing if existing else ""
+                else:
+                    result[key] = text
             elif kind == "spin":
                 result[key] = widget.value()
             elif kind == "dspin":

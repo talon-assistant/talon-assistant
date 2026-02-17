@@ -212,6 +212,24 @@ QProgressBar::chunk {
     border-top: 1px solid #313244;
 }
 
+/* Stop speaking button */
+#stop_speaking_btn {
+    background-color: #f38ba8;
+    color: #1e1e2e;
+    border: none;
+    border-radius: 6px;
+    padding: 4px 12px;
+    font-weight: bold;
+}
+
+#stop_speaking_btn:hover {
+    background-color: #eba0ac;
+}
+
+#stop_speaking_btn:pressed {
+    background-color: #e06c88;
+}
+
 /* Wake word indicator */
 #wake_indicator_off {
     background-color: #45475a;

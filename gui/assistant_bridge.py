@@ -6,6 +6,7 @@ import importlib
 from PyQt6.QtCore import QObject, pyqtSignal, pyqtSlot
 from gui.workers import CommandWorker, TTSWorker, VoiceListenWorker
 from talents.base import BaseTalent
+from core.credential_store import CredentialStore
 
 
 class AssistantBridge(QObject):
@@ -34,6 +35,7 @@ class AssistantBridge(QObject):
     # TTS signals
     tts_started = pyqtSignal()
     tts_finished = pyqtSignal()
+    tts_stopped = pyqtSignal()  # emitted when TTS is interrupted early
 
     # System status
     llm_status = pyqtSignal(bool)
@@ -57,6 +59,7 @@ class AssistantBridge(QObject):
         self._tts_worker = None
         self._voice_worker = None
         self._tts_enabled = True
+        self.credential_store = CredentialStore()
 
     def set_assistant(self, assistant):
         """Accept a pre-built TalonAssistant (loaded on the main thread).
@@ -98,6 +101,9 @@ class AssistantBridge(QObject):
             self.command_error.emit(command, "Already processing a command")
             return
 
+        # Auto-stop any in-progress TTS when user sends a new command
+        self.stop_speaking()
+
         self.command_started.emit(command)
         self.activity.emit("processing")
 
@@ -131,6 +137,7 @@ class AssistantBridge(QObject):
         self._tts_worker = TTSWorker(self.assistant.voice, text)
         self._tts_worker.started_speaking.connect(self.tts_started.emit)
         self._tts_worker.finished_speaking.connect(self._on_tts_done)
+        self._tts_worker.stopped_early.connect(self._on_tts_stopped)
         self._tts_worker.error.connect(lambda e: print(f"TTS Error: {e}"))
         self.activity.emit("speaking")
         self._tts_worker.start()
@@ -138,6 +145,16 @@ class AssistantBridge(QObject):
     def _on_tts_done(self):
         self.tts_finished.emit()
         self.activity.emit("idle")
+
+    def _on_tts_stopped(self):
+        self.tts_stopped.emit()
+        self.tts_finished.emit()
+        self.activity.emit("idle")
+
+    def stop_speaking(self):
+        """Interrupt in-progress TTS playback."""
+        if self._tts_worker and self._tts_worker.isRunning():
+            self._tts_worker.request_stop()
 
     @pyqtSlot(bool)
     def toggle_voice(self, enabled):
@@ -305,15 +322,36 @@ class AssistantBridge(QObject):
 
     @pyqtSlot(str, dict)
     def update_talent_config(self, talent_name, config):
-        """Update a talent's per-talent config at runtime and persist."""
+        """Update a talent's per-talent config at runtime and persist.
+
+        Password-type fields are intercepted: the real value is stored in
+        the OS keyring and an empty string is written to talents.json.
+        """
         talent = self.get_talent(talent_name)
         if talent is None:
             return
 
-        # Update in-memory
+        # Identify password fields from the talent's schema
+        schema = talent.get_config_schema() or {}
+        password_keys = {
+            f["key"] for f in schema.get("fields", [])
+            if f.get("type") == "password"
+        }
+
+        # Separate secrets from the config that gets written to disk
+        disk_config = dict(config)
+        for key in password_keys:
+            value = config.get(key, "")
+            if value:
+                # Store real secret in keyring
+                self.credential_store.store_secret(talent_name, key, value)
+                # Write empty string to disk so plaintext never hits JSON
+                disk_config[key] = ""
+
+        # Update in-memory with real values (talent needs them at runtime)
         talent.update_config(config)
 
-        # Persist to config/talents.json
+        # Persist sanitised config to config/talents.json
         config_path = os.path.join(self.config_dir, "talents.json")
         try:
             with open(config_path, 'r') as f:
@@ -323,7 +361,7 @@ class AssistantBridge(QObject):
 
         if talent_name not in talents_cfg:
             talents_cfg[talent_name] = {}
-        talents_cfg[talent_name]["config"] = config
+        talents_cfg[talent_name]["config"] = disk_config
 
         with open(config_path, 'w') as f:
             json.dump(talents_cfg, f, indent=2)

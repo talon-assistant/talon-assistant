@@ -3,7 +3,7 @@ import json
 from PyQt6.QtWidgets import (QMainWindow, QWidget, QVBoxLayout, QSplitter,
                              QMenuBar, QStatusBar, QFileDialog, QMessageBox)
 from PyQt6.QtCore import Qt
-from PyQt6.QtGui import QAction, QActionGroup
+from PyQt6.QtGui import QAction, QActionGroup, QShortcut, QKeySequence
 
 from gui.assistant_bridge import AssistantBridge
 from gui.widgets.chat_view import ChatView
@@ -257,6 +257,19 @@ class MainWindow(QMainWindow):
             lambda: self.activity_log.append_entry("TTS", "Speaking..."))
         self.bridge.tts_finished.connect(
             lambda: self.activity_log.append_entry("TTS", "Finished speaking"))
+        self.bridge.tts_stopped.connect(
+            lambda: self.activity_log.append_entry("TTS", "Stopped by user"))
+
+        # TTS start/stop -> voice panel stop button visibility
+        self.bridge.tts_started.connect(self.voice_panel.on_tts_started)
+        self.bridge.tts_finished.connect(self.voice_panel.on_tts_finished)
+
+        # Voice panel stop button -> bridge
+        self.voice_panel.stop_requested.connect(self.bridge.stop_speaking)
+
+        # Escape key shortcut to stop TTS
+        self._stop_shortcut = QShortcut(QKeySequence(Qt.Key.Key_Escape), self)
+        self._stop_shortcut.activated.connect(self.bridge.stop_speaking)
 
         # Talent sidebar import + configure + marketplace
         self.talent_sidebar.import_requested.connect(
@@ -458,7 +471,8 @@ class MainWindow(QMainWindow):
             return
         current_config = talent.talent_config
         dialog = TalentConfigDialog(
-            talent_name, talent.name, schema, current_config, self)
+            talent_name, talent.name, schema, current_config, self,
+            credential_store=self.bridge.credential_store)
         dialog.config_saved.connect(self.bridge.update_talent_config)
         dialog.exec()
 

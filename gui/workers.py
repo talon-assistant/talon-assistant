@@ -66,10 +66,12 @@ class TTSWorker(QThread):
     """Runs text-to-speech off the GUI thread.
 
     voice.speak() uses asyncio.run() internally, which is safe from a QThread.
+    Supports mid-speech interruption via request_stop().
     """
 
     started_speaking = pyqtSignal()
     finished_speaking = pyqtSignal()
+    stopped_early = pyqtSignal()  # emitted when TTS was interrupted
     error = pyqtSignal(str)
 
     def __init__(self, voice_system, text):
@@ -80,10 +82,17 @@ class TTSWorker(QThread):
     def run(self):
         try:
             self.started_speaking.emit()
-            self.voice.speak(self.text)
-            self.finished_speaking.emit()
+            completed = self.voice.speak(self.text)
+            if completed:
+                self.finished_speaking.emit()
+            else:
+                self.stopped_early.emit()
         except Exception as e:
             self.error.emit(str(e))
+
+    def request_stop(self):
+        """Ask the voice system to stop playback immediately."""
+        self.voice.stop_speaking()
 
 
 class VoiceListenWorker(QThread):

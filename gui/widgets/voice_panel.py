@@ -3,10 +3,11 @@ from PyQt6.QtCore import pyqtSignal, QTimer
 
 
 class VoicePanel(QWidget):
-    """Voice controls: mic toggle, TTS toggle, audio level bar, status indicator."""
+    """Voice controls: mic toggle, TTS toggle, stop button, audio level bar, status indicator."""
 
     voice_toggled = pyqtSignal(bool)
     tts_toggled = pyqtSignal(bool)
+    stop_requested = pyqtSignal()
 
     def __init__(self):
         super().__init__()
@@ -30,6 +31,14 @@ class VoicePanel(QWidget):
         self.tts_button.setFixedWidth(100)
         self.tts_button.toggled.connect(self._on_tts_toggle)
         layout.addWidget(self.tts_button)
+
+        # Stop speaking button (hidden by default, shown during TTS playback)
+        self.stop_button = QPushButton("Stop")
+        self.stop_button.setObjectName("stop_speaking_btn")
+        self.stop_button.setFixedWidth(70)
+        self.stop_button.clicked.connect(self.stop_requested.emit)
+        self.stop_button.setVisible(False)
+        layout.addWidget(self.stop_button)
 
         # Audio level bar
         self.level_bar = QProgressBar()
@@ -86,3 +95,11 @@ class VoicePanel(QWidget):
         self.wake_indicator.setObjectName("wake_indicator_off")
         self.wake_indicator.style().unpolish(self.wake_indicator)
         self.wake_indicator.style().polish(self.wake_indicator)
+
+    def on_tts_started(self):
+        """Show the stop button while Talon is speaking."""
+        self.stop_button.setVisible(True)
+
+    def on_tts_finished(self):
+        """Hide the stop button when TTS ends (normal or interrupted)."""
+        self.stop_button.setVisible(False)

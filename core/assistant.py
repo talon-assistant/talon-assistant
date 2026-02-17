@@ -10,6 +10,7 @@ from core.memory import MemorySystem
 from core.llm_client import LLMClient
 from core.vision import VisionSystem
 from core.voice import VoiceSystem
+from core.credential_store import CredentialStore
 from talents.base import BaseTalent
 
 
@@ -46,7 +47,15 @@ class TalonAssistant:
         # 3. Discover and load talents
         print("[5/5] Loading Talents...")
         self.talents: list[BaseTalent] = []
+        self.credential_store = CredentialStore()
         self._discover_talents()
+
+        # 3b. Inject keyring secrets into talent configs + scrub plaintext
+        self._inject_secrets()
+        self._scrub_plaintext_secrets(config_dir)
+
+        # 3c. Legacy migration: email keyring entries
+        self._migrate_legacy_credentials()
 
         # 4. Notification callback (set by bridge for talents that need it)
         self.notify_callback = None
@@ -122,6 +131,73 @@ class TalonAssistant:
 
         # Sort by priority (higher = checked first)
         self.talents.sort(key=lambda t: t.priority, reverse=True)
+
+    def _inject_secrets(self):
+        """Fill empty password fields from the OS keyring so talents
+        have real credentials at runtime without storing them on disk."""
+        for talent in self.talents:
+            schema = talent.get_config_schema() or {}
+            password_keys = [
+                f["key"] for f in schema.get("fields", [])
+                if f.get("type") == "password"
+            ]
+            if not password_keys:
+                continue
+
+            cfg = dict(talent.talent_config)
+            changed = False
+            for key in password_keys:
+                current = cfg.get(key, "")
+                if not current:
+                    secret = self.credential_store.get_secret(talent.name, key)
+                    if secret:
+                        cfg[key] = secret
+                        changed = True
+            if changed:
+                talent.update_config(cfg)
+                print(f"   [Credentials] Injected keyring secrets for: {talent.name}")
+
+    def _scrub_plaintext_secrets(self, config_dir):
+        """One-time migration: move any plaintext passwords already in
+        talents.json into the keyring and replace with empty strings."""
+        config_path = os.path.join(config_dir, "talents.json")
+        try:
+            with open(config_path, 'r') as f:
+                talents_cfg = json.load(f)
+        except (FileNotFoundError, json.JSONDecodeError):
+            return
+
+        dirty = False
+        for talent in self.talents:
+            schema = talent.get_config_schema() or {}
+            password_keys = [
+                f["key"] for f in schema.get("fields", [])
+                if f.get("type") == "password"
+            ]
+            if not password_keys:
+                continue
+
+            tcfg = talents_cfg.get(talent.name, {}).get("config", {})
+            for key in password_keys:
+                value = tcfg.get(key, "")
+                if value:
+                    # Move to keyring
+                    self.credential_store.store_secret(talent.name, key, value)
+                    tcfg[key] = ""
+                    dirty = True
+                    print(f"   [Credentials] Scrubbed plaintext {talent.name}.{key}")
+
+        if dirty:
+            with open(config_path, 'w') as f:
+                json.dump(talents_cfg, f, indent=2)
+
+    def _migrate_legacy_credentials(self):
+        """Migrate legacy email keyring entries to the new service name."""
+        for talent in self.talents:
+            if talent.name == "email":
+                username = talent.talent_config.get("username", "")
+                self.credential_store.migrate_legacy_email(username)
+                break
 
     def _build_context(self, command, speak_response):
         """Build the context dict passed to talent.execute()"""

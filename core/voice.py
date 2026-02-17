@@ -5,6 +5,7 @@ import tempfile
 import os
 import string
 import asyncio
+import threading
 import edge_tts
 import soundfile as sf
 from faster_whisper import WhisperModel
@@ -54,6 +55,9 @@ class VoiceSystem:
             )
             print("   Whisper loaded on CPU!")
 
+        # TTS stop event — set by stop_speaking() to interrupt playback
+        self._stop_event = threading.Event()
+
         print("   TTS ready!")
 
     def record_audio(self, duration):
@@ -83,19 +87,34 @@ class VoiceSystem:
         return text.lower().translate(str.maketrans('', '', string.punctuation))
 
     def speak(self, text):
-        """Convert text to speech using edge-tts"""
+        """Convert text to speech using edge-tts.
+
+        Returns True if speech completed normally, False if interrupted.
+        """
         print(f"Talon: {text}")
 
         if not text or len(text.strip()) == 0:
-            return
+            return True
 
         if text.startswith("Error:"):
-            return
+            return True
 
-        asyncio.run(self._async_speak(text))
+        self._stop_event.clear()
+        return asyncio.run(self._async_speak(text))
+
+    def stop_speaking(self):
+        """Interrupt any in-progress TTS playback immediately."""
+        self._stop_event.set()
+        try:
+            sd.stop()
+        except Exception:
+            pass
 
     async def _async_speak(self, text):
-        """Async helper for edge-tts"""
+        """Async helper for edge-tts.
+
+        Returns True if completed normally, False if interrupted.
+        """
         temp_audio = tempfile.mktemp(suffix=".mp3")
 
         try:
@@ -103,22 +122,37 @@ class VoiceSystem:
             await communicate.save(temp_audio)
             await asyncio.sleep(0.2)
 
+            if self._stop_event.is_set():
+                return False
+
             if not os.path.exists(temp_audio):
-                return
+                return True
 
             if os.path.getsize(temp_audio) == 0:
-                return
+                return True
 
             data, samplerate = sf.read(temp_audio)
             sd.play(data, samplerate)
-            sd.wait()
+
+            # Poll instead of sd.wait() so we can respond to stop_speaking()
+            while sd.get_stream() and sd.get_stream().active:
+                if self._stop_event.is_set():
+                    sd.stop()
+                    return False
+                await asyncio.sleep(0.05)
+
+            return True
 
         except Exception as e:
             print(f"TTS Error: {e}")
+            return True
 
         finally:
             if os.path.exists(temp_audio):
-                os.remove(temp_audio)
+                try:
+                    os.remove(temp_audio)
+                except OSError:
+                    pass
 
     def listen_for_wake_word(self):
         """Continuously listen for wake words"""

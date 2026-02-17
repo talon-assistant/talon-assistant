@@ -1,8 +1,7 @@
 """EmailTalent — check, read, and send email via IMAP/SMTP.
 
 Uses stdlib imaplib + smtplib (no third-party mail libraries).
-Credentials are stored via the `keyring` library when available,
-falling back to plaintext config with a console warning.
+Credentials are managed centrally by the CredentialStore (OS keyring).
 
 Examples:
     "check my email"
@@ -21,15 +20,6 @@ from email.mime.multipart import MIMEMultipart
 from email.header import decode_header
 from datetime import datetime
 from talents.base import BaseTalent
-
-# Optional: keyring for secure credential storage
-try:
-    import keyring
-    _HAS_KEYRING = True
-except ImportError:
-    _HAS_KEYRING = False
-
-_KEYRING_SERVICE = "talon_email"
 
 
 class EmailTalent(BaseTalent):
@@ -100,20 +90,8 @@ class EmailTalent(BaseTalent):
         }
 
     def update_config(self, config: dict) -> None:
-        """Store config and persist password to keyring if available."""
-        password = config.get("password", "")
-        username = config.get("username", "")
-
-        # Save password to keyring, remove from plaintext config
-        if _HAS_KEYRING and password and username:
-            try:
-                keyring.set_password(_KEYRING_SERVICE, username, password)
-                config = dict(config)  # copy so we don't mutate
-                config["password"] = ""  # don't persist in talents.json
-                print("   [Email] Password saved to system keyring")
-            except Exception as e:
-                print(f"   [Email] Keyring save failed ({e}), password in config")
-
+        """Store config.  Credential storage is handled centrally by the
+        CredentialStore via the bridge — no keyring logic needed here."""
         self._config = config
         # Force reconnect next time
         self._disconnect()
@@ -362,17 +340,12 @@ class EmailTalent(BaseTalent):
     # ── IMAP helpers ───────────────────────────────────────────────
 
     def _get_password(self):
-        """Retrieve password from keyring or config."""
-        username = self._config.get("username", "")
-        # Try keyring first
-        if _HAS_KEYRING and username:
-            try:
-                pw = keyring.get_password(_KEYRING_SERVICE, username)
-                if pw:
-                    return pw
-            except Exception:
-                pass
-        # Fall back to config
+        """Retrieve password from the in-memory config.
+
+        The real password is injected from the OS keyring at startup by
+        TalonAssistant._inject_secrets(), so it's always available here
+        as long as credentials have been configured.
+        """
         return self._config.get("password", "")
 
     def _connect_imap(self):
