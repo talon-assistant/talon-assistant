@@ -749,3 +749,82 @@ QGroupBox::title {
     subcontrol-position: top left;
     padding: 0 6px;
 }
+
+/* Help dialog */
+#help_header {
+    font-size: 16px;
+    font-weight: bold;
+    color: #89b4fa;
+    background: transparent;
+    padding: 4px 0px;
+}
+
+#help_search {
+    background-color: #313244;
+    color: #cdd6f4;
+    border: 1px solid #45475a;
+    border-radius: 8px;
+    padding: 6px 10px;
+}
+
+#help_search:focus {
+    border-color: #89b4fa;
+}
+
+#help_topic_list {
+    background-color: #181825;
+    color: #cdd6f4;
+    border: 1px solid #313244;
+    border-radius: 6px;
+}
+
+#help_topic_list::item {
+    padding: 8px;
+    border-bottom: 1px solid #313244;
+}
+
+#help_topic_list::item:selected {
+    background-color: #313244;
+    color: #89b4fa;
+}
+
+#help_content_pane {
+    background-color: #1e1e2e;
+    color: #cdd6f4;
+    border: 1px solid #313244;
+    border-radius: 6px;
+    padding: 8px;
+}
+
+/* About dialog */
+#about_app_name {
+    font-size: 18px;
+    font-weight: bold;
+    color: #89b4fa;
+    background: transparent;
+}
+
+#about_version {
+    font-size: 12px;
+    color: #a6adc8;
+    background: transparent;
+}
+
+#about_description {
+    color: #cdd6f4;
+    background: transparent;
+}
+
+#about_license {
+    font-size: 11px;
+    color: #6c7086;
+    background: transparent;
+}
+
+#about_link {
+    background: transparent;
+}
+
+#about_link a {
+    color: #89b4fa;
+}

@@ -163,6 +163,24 @@ class MainWindow(QMainWindow):
         reset_font_action.triggered.connect(self._reset_font)
         appearance_menu.addAction(reset_font_action)
 
+        # ── Help menu ─────────────────────────────────────────
+        help_menu = menubar.addMenu("Help")
+
+        help_topics_action = QAction("Help Topics...", self)
+        help_topics_action.setShortcut("Ctrl+F1")
+        help_topics_action.triggered.connect(self._open_help)
+        help_menu.addAction(help_topics_action)
+
+        shortcuts_action = QAction("Keyboard Shortcuts...", self)
+        shortcuts_action.triggered.connect(self._open_shortcuts_help)
+        help_menu.addAction(shortcuts_action)
+
+        help_menu.addSeparator()
+
+        about_action = QAction("About Talon", self)
+        about_action.triggered.connect(self._open_about)
+        help_menu.addAction(about_action)
+
     def _setup_central_widget(self):
         central = QWidget()
         self.setCentralWidget(central)
@@ -536,6 +554,23 @@ class MainWindow(QMainWindow):
             talent_name, talent.name, schema, current_config, self,
             credential_store=self.bridge.credential_store)
         dialog.config_saved.connect(self.bridge.update_talent_config)
+        dialog.exec()
+
+    # ── Help / About ─────────────────────────────────────────
+
+    def _open_help(self):
+        from gui.dialogs.help_dialog import HelpDialog
+        dialog = HelpDialog(parent=self)
+        dialog.exec()
+
+    def _open_shortcuts_help(self):
+        from gui.dialogs.help_dialog import HelpDialog
+        dialog = HelpDialog(parent=self, initial_topic="Keyboard Shortcuts")
+        dialog.exec()
+
+    def _open_about(self):
+        from gui.dialogs.about_dialog import AboutDialog
+        dialog = AboutDialog(parent=self)
         dialog.exec()
 
     # ── Notifications ────────────────────────────────────────
