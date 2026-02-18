@@ -1,6 +1,7 @@
 {
   "llm": {
     "endpoint": "http://localhost:5001/api/v1/generate",
+    "api_format": "koboldcpp",
     "max_length": 512,
     "temperature": 0.7,
     "top_p": 0.9,
@@ -13,6 +14,16 @@
       "assistant_prefix": "\n<|im_start|>assistant\n",
       "vision_prefix": "<|vision_start|><|image_pad|><|vision_end|>"
     }
+  },
+  "llm_server": {
+    "mode": "external",
+    "model_path": "",
+    "port": 8080,
+    "n_gpu_layers": -1,
+    "ctx_size": 4096,
+    "threads": 4,
+    "bin_path": "bin/",
+    "extra_args": ""
   },
   "audio": {
     "sample_rate": 16000,

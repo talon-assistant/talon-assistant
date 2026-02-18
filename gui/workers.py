@@ -194,3 +194,90 @@ class VoiceListenWorker(QThread):
     def stop(self):
         """Stop the listening loop. May take up to chunk_duration to finish."""
         self.running = False
+
+
+class DownloadWorker(QThread):
+    """Downloads llama.cpp release in a background thread.
+
+    Used by LLMSetupDialog to avoid blocking the GUI during large downloads.
+    """
+
+    progress = pyqtSignal(int, int)     # bytes_downloaded, total_bytes
+    finished = pyqtSignal(str)          # path to extracted binary
+    error = pyqtSignal(str)
+    status = pyqtSignal(str)            # status message for UI
+
+    def __init__(self, server_manager):
+        super().__init__()
+        self.server_manager = server_manager
+
+    def run(self):
+        try:
+            self.server_manager.download_server(
+                progress_cb=self._on_progress,
+                status_cb=self._on_status,
+            )
+            exe_path = str(self.server_manager.server_exe_path)
+            self.finished.emit(exe_path)
+        except Exception as e:
+            self.error.emit(str(e))
+
+    def _on_progress(self, downloaded, total):
+        self.progress.emit(downloaded, total)
+
+    def _on_status(self, message):
+        self.status.emit(message)
+
+
+class ServerStartWorker(QThread):
+    """Starts the llama-server and waits for it to become healthy.
+
+    Runs in background so the GUI stays responsive during model loading.
+    """
+
+    ready = pyqtSignal()
+    error = pyqtSignal(str)
+    status = pyqtSignal(str)
+
+    def __init__(self, server_manager):
+        super().__init__()
+        self.server_manager = server_manager
+
+    def run(self):
+        self.status.emit("Starting server...")
+
+        # Wire callbacks for this run
+        original_ready = self.server_manager.on_ready
+        original_error = self.server_manager.on_error
+
+        ready_event = threading.Event()
+        error_msg = [None]
+
+        def on_ready():
+            ready_event.set()
+
+        def on_error(msg):
+            error_msg[0] = msg
+            ready_event.set()
+
+        self.server_manager.on_ready = on_ready
+        self.server_manager.on_error = on_error
+
+        try:
+            self.server_manager.start()
+
+            # Wait for either ready or error (max 130s to exceed health poll timeout)
+            ready_event.wait(timeout=130)
+
+            if error_msg[0]:
+                self.error.emit(error_msg[0])
+            elif self.server_manager.status == "running":
+                self.ready.emit()
+            else:
+                self.error.emit("Server failed to start (unknown reason).")
+        except Exception as e:
+            self.error.emit(str(e))
+        finally:
+            # Restore original callbacks
+            self.server_manager.on_ready = original_ready
+            self.server_manager.on_error = original_error

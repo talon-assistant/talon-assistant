@@ -6,6 +6,7 @@ class StatusBarWidget(QWidget):
 
     def __init__(self):
         super().__init__()
+        self._server_mode = "external"  # "external" or "builtin"
         layout = QHBoxLayout(self)
         layout.setContentsMargins(8, 0, 8, 0)
 
@@ -35,9 +36,33 @@ class StatusBarWidget(QWidget):
         sep.setObjectName("status_separator")
         return sep
 
+    def set_server_mode(self, mode):
+        """Set the LLM server mode for status display ('builtin' or 'external')."""
+        self._server_mode = mode
+
     def set_llm_status(self, connected):
-        text = "LLM: Connected" if connected else "LLM: Disconnected"
-        obj_name = "status_llm_connected" if connected else "status_llm_disconnected"
+        prefix = "Built-in" if self._server_mode == "builtin" else "External"
+        if connected:
+            text = f"LLM: {prefix} (Connected)"
+            obj_name = "status_llm_connected"
+        else:
+            text = f"LLM: {prefix} (Disconnected)"
+            obj_name = "status_llm_disconnected"
+        self.llm_indicator.setText(text)
+        self.llm_indicator.setObjectName(obj_name)
+        self.llm_indicator.style().unpolish(self.llm_indicator)
+        self.llm_indicator.style().polish(self.llm_indicator)
+
+    def set_server_status(self, status):
+        """Update the LLM indicator for built-in server status changes."""
+        status_map = {
+            "starting": ("LLM: Built-in (Starting...)", "status_llm_unknown"),
+            "running": ("LLM: Built-in (Running)", "status_llm_connected"),
+            "stopped": ("LLM: Built-in (Stopped)", "status_llm_disconnected"),
+            "error": ("LLM: Built-in (Error)", "status_llm_disconnected"),
+        }
+        text, obj_name = status_map.get(
+            status, (f"LLM: Built-in ({status})", "status_llm_unknown"))
         self.llm_indicator.setText(text)
         self.llm_indicator.setObjectName(obj_name)
         self.llm_indicator.style().unpolish(self.llm_indicator)

@@ -103,6 +103,10 @@ class MainWindow(QMainWindow):
         settings_action.triggered.connect(self._open_settings)
         file_menu.addAction(settings_action)
 
+        llm_server_action = QAction("LLM Server...", self)
+        llm_server_action.triggered.connect(self._open_llm_setup)
+        file_menu.addAction(llm_server_action)
+
         file_menu.addSeparator()
 
         exit_action = QAction("Exit", self)
@@ -251,6 +255,11 @@ class MainWindow(QMainWindow):
         self.bridge.activity.connect(self.status_bar_widget.set_activity)
         self.bridge.llm_status.connect(self.status_bar_widget.set_llm_status)
         self.bridge.voice_status.connect(self.status_bar_widget.set_voice_status)
+        self.bridge.server_status.connect(self.status_bar_widget.set_server_status)
+
+        # Set server mode for status bar display
+        if self.bridge.server_manager:
+            self.status_bar_widget.set_server_mode("builtin")
 
         # Bridge TTS signals
         self.bridge.tts_started.connect(
@@ -331,6 +340,59 @@ class MainWindow(QMainWindow):
         dialog = SettingsDialog(current, config_path, self)
         dialog.settings_saved.connect(self.bridge.update_settings)
         dialog.exec()
+
+    # ── LLM Server ────────────────────────────────────────────
+
+    def _open_llm_setup(self):
+        """Open the LLM Server configuration dialog."""
+        from gui.dialogs.llm_setup_dialog import LLMSetupDialog
+
+        config_path = os.path.join(self.config_dir, "settings.json")
+        try:
+            with open(config_path, 'r') as f:
+                full_settings = json.load(f)
+        except (FileNotFoundError, json.JSONDecodeError):
+            full_settings = {}
+
+        llm_config = full_settings.get("llm", {})
+        server_config = full_settings.get("llm_server", {})
+
+        # Create server manager on-the-fly if one doesn't exist yet
+        # (user started in external mode but wants to configure builtin)
+        if self.bridge.server_manager is None:
+            from core.llm_server import LLMServerManager
+            manager = LLMServerManager(server_config)
+            self.bridge.set_server_manager(manager)
+
+        dialog = LLMSetupDialog(
+            llm_config, server_config,
+            server_manager=self.bridge.server_manager,
+            config_path=config_path,
+            parent=self,
+        )
+        dialog.settings_saved.connect(self._on_llm_settings_saved)
+        dialog.exec()
+
+    def _on_llm_settings_saved(self, combined):
+        """Apply LLM settings changes at runtime."""
+        if "llm" in combined:
+            self.bridge.update_settings(combined)
+            # Also hot-swap api_format on the LLM client
+            if self.bridge.assistant:
+                llm = self.bridge.assistant.llm
+                llm.api_format = combined["llm"].get(
+                    "api_format", llm.api_format)
+
+        if "llm_server" in combined and self.bridge.server_manager:
+            self.bridge.server_manager.update_config(combined["llm_server"])
+
+        # Re-test LLM connection with new settings
+        if self.bridge.assistant:
+            try:
+                connected = self.bridge.assistant.llm.test_connection()
+                self.bridge.llm_status.emit(connected)
+            except Exception:
+                self.bridge.llm_status.emit(False)
 
     # ── Theme / Appearance ───────────────────────────────────
 

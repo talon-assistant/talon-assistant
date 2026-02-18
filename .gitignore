@@ -35,6 +35,9 @@ config/talents.json
 talents/user/*.py
 !talents/user/__init__.py
 
+# Downloaded binaries (llama.cpp, CUDA DLLs)
+bin/
+
 # Marketplace cache
 marketplace/
 

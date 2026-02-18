@@ -51,6 +51,9 @@ class AssistantBridge(QObject):
     # Notifications (for system tray)
     notification_requested = pyqtSignal(str, str)  # title, message
 
+    # LLM server status
+    server_status = pyqtSignal(str)  # stopped/starting/running/error
+
     def __init__(self, config_dir="config"):
         super().__init__()
         self.config_dir = config_dir
@@ -60,6 +63,7 @@ class AssistantBridge(QObject):
         self._voice_worker = None
         self._tts_enabled = True
         self.credential_store = CredentialStore()
+        self.server_manager = None  # LLMServerManager, set by main.py
 
     def set_assistant(self, assistant):
         """Accept a pre-built TalonAssistant (loaded on the main thread).
@@ -90,6 +94,16 @@ class AssistantBridge(QObject):
 
         self.activity.emit("idle")
         self.init_complete.emit()
+
+    def set_server_manager(self, manager):
+        """Accept an LLMServerManager for lifecycle management."""
+        self.server_manager = manager
+        if manager:
+            manager.on_status_changed = self._on_server_status_changed
+
+    def _on_server_status_changed(self, status):
+        """Relay server status changes to the GUI."""
+        self.server_status.emit(status)
 
     @pyqtSlot(str)
     def submit_command(self, command):
@@ -242,6 +256,8 @@ class AssistantBridge(QObject):
                 "rep_pen", self.assistant.llm.rep_pen)
             self.assistant.llm.timeout = llm_cfg.get(
                 "timeout", self.assistant.llm.timeout)
+            self.assistant.llm.api_format = llm_cfg.get(
+                "api_format", self.assistant.llm.api_format)
 
         # Hot-swap voice settings
         if "voice" in new_settings:
@@ -444,4 +460,11 @@ class AssistantBridge(QObject):
                     self._tts_worker.terminate()
                     self._tts_worker.wait(1000)
         except RuntimeError:
+            pass
+
+        # Stop built-in LLM server if running
+        try:
+            if self.server_manager and self.server_manager.is_running():
+                self.server_manager.stop()
+        except Exception:
             pass

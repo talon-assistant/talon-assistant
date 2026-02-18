@@ -360,7 +360,21 @@ class EmailTalent(BaseTalent):
 
         print(f"   [Email] Connecting to IMAP {server}:{port}...")
         imap = imaplib.IMAP4_SSL(server, port)
-        imap.login(username, password)
+
+        try:
+            imap.login(username, password)
+        except imaplib.IMAP4.error as e:
+            err = str(e).lower()
+            if "unmatch" in err or "quote" in err or "parse" in err:
+                # Password has special chars that break IMAP quoting;
+                # open a fresh connection and use SASL PLAIN instead.
+                imap = imaplib.IMAP4_SSL(server, port)
+                auth_string = f"\x00{username}\x00{password}"
+                imap.authenticate("PLAIN",
+                                  lambda _: auth_string.encode("utf-8"))
+            else:
+                raise
+
         self._imap = imap
         self._connected = True
         print(f"   [Email] IMAP connected!")
@@ -385,10 +399,16 @@ class EmailTalent(BaseTalent):
         summaries = []
         for mid in msg_ids:
             try:
-                status, data = imap.fetch(mid, "(RFC822.HEADER)")
+                # BODY.PEEK[HEADER] avoids marking as read and works on
+                # servers (like iCloud) where RFC822.HEADER returns empty.
+                status, data = imap.fetch(mid, "(BODY.PEEK[HEADER])")
                 if status != "OK":
                     continue
+                if not data or not data[0] or not isinstance(data[0], tuple):
+                    continue
                 raw_header = data[0][1]
+                if not isinstance(raw_header, bytes):
+                    continue
                 msg = email.message_from_bytes(raw_header)
                 summaries.append({
                     "from": self._decode_header(msg.get("From", "Unknown")),
@@ -405,10 +425,16 @@ class EmailTalent(BaseTalent):
         emails = []
         for mid in msg_ids:
             try:
-                status, data = imap.fetch(mid, "(RFC822)")
+                # BODY.PEEK[] avoids marking as read and works on servers
+                # (like iCloud) where RFC822 returns empty responses.
+                status, data = imap.fetch(mid, "(BODY.PEEK[])")
                 if status != "OK":
                     continue
+                if not data or not data[0] or not isinstance(data[0], tuple):
+                    continue
                 raw = data[0][1]
+                if not isinstance(raw, bytes):
+                    continue
                 msg = email.message_from_bytes(raw)
 
                 body = ""
@@ -417,13 +443,18 @@ class EmailTalent(BaseTalent):
                         ct = part.get_content_type()
                         if ct == "text/plain":
                             payload = part.get_payload(decode=True)
-                            if payload:
+                            if isinstance(payload, bytes):
                                 body = payload.decode("utf-8", errors="replace")
+                            elif isinstance(payload, str):
+                                body = payload
+                            if body:
                                 break
                 else:
                     payload = msg.get_payload(decode=True)
-                    if payload:
+                    if isinstance(payload, bytes):
                         body = payload.decode("utf-8", errors="replace")
+                    elif isinstance(payload, str):
+                        body = payload
 
                 emails.append({
                     "from": self._decode_header(msg.get("From", "Unknown")),
@@ -441,13 +472,21 @@ class EmailTalent(BaseTalent):
         """Decode an email header that may be encoded (e.g., =?UTF-8?Q?...)."""
         if not value:
             return ""
-        parts = decode_header(value)
+        try:
+            parts = decode_header(str(value))
+        except Exception:
+            return str(value)
         decoded = []
         for part, charset in parts:
             if isinstance(part, bytes):
-                decoded.append(part.decode(charset or "utf-8", errors="replace"))
-            else:
+                try:
+                    decoded.append(part.decode(charset or "utf-8", errors="replace"))
+                except (LookupError, AttributeError):
+                    decoded.append(part.decode("utf-8", errors="replace"))
+            elif isinstance(part, str):
                 decoded.append(part)
+            else:
+                decoded.append(str(part))
         return " ".join(decoded)
 
     def _extract_sender(self, command):

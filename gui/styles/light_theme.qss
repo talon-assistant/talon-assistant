@@ -641,3 +641,111 @@ QSlider::handle:horizontal {
 QSlider::handle:horizontal:hover {
     background-color: #7287fd;
 }
+
+/* LLM Setup Dialog */
+#llm_setup_header {
+    font-size: 16px;
+    font-weight: bold;
+    color: #1e66f5;
+    background: transparent;
+    padding: 4px 0px;
+}
+
+#llm_model_path {
+    background-color: #ccd0da;
+    color: #4c4f69;
+    border: 1px solid #bcc0cc;
+    border-radius: 6px;
+    padding: 4px 8px;
+}
+
+#llm_download_btn {
+    background-color: #1e66f5;
+    color: #eff1f5;
+    border: none;
+    border-radius: 6px;
+    padding: 6px 16px;
+    font-weight: bold;
+}
+
+#llm_download_btn:hover {
+    background-color: #2a7ae8;
+}
+
+#llm_download_btn:disabled {
+    background-color: #ccd0da;
+    color: #9ca0b0;
+}
+
+#llm_start_btn {
+    background-color: #40a02b;
+    color: #eff1f5;
+    border: none;
+    border-radius: 6px;
+    padding: 6px 16px;
+    font-weight: bold;
+}
+
+#llm_start_btn:hover {
+    background-color: #2d9418;
+}
+
+#llm_start_btn:disabled {
+    background-color: #ccd0da;
+    color: #9ca0b0;
+}
+
+#llm_stop_btn {
+    background-color: #d20f39;
+    color: #eff1f5;
+    border: none;
+    border-radius: 6px;
+    padding: 6px 16px;
+    font-weight: bold;
+}
+
+#llm_stop_btn:hover {
+    background-color: #e01b45;
+}
+
+#llm_stop_btn:disabled {
+    background-color: #ccd0da;
+    color: #9ca0b0;
+}
+
+#llm_status_dot_running {
+    color: #40a02b;
+    font-weight: bold;
+    background: transparent;
+}
+
+#llm_status_dot_stopped {
+    color: #9ca0b0;
+    background: transparent;
+}
+
+#llm_status_dot_starting {
+    color: #df8e1d;
+    background: transparent;
+}
+
+#llm_status_dot_error {
+    color: #d20f39;
+    font-weight: bold;
+    background: transparent;
+}
+
+QGroupBox {
+    background-color: #e6e9ef;
+    border: 1px solid #ccd0da;
+    border-radius: 8px;
+    margin-top: 12px;
+    padding-top: 20px;
+}
+
+QGroupBox::title {
+    color: #1e66f5;
+    subcontrol-origin: margin;
+    subcontrol-position: top left;
+    padding: 0 6px;
+}

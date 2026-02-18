@@ -50,12 +50,14 @@ class TalonAssistant:
         self.credential_store = CredentialStore()
         self._discover_talents()
 
-        # 3b. Inject keyring secrets into talent configs + scrub plaintext
-        self._inject_secrets()
+        # 3b. Legacy migration first (old keyring entries -> new service name)
+        self._migrate_legacy_credentials()
+
+        # 3c. Scrub any plaintext secrets from talents.json into keyring
         self._scrub_plaintext_secrets(config_dir)
 
-        # 3c. Legacy migration: email keyring entries
-        self._migrate_legacy_credentials()
+        # 3d. Inject keyring secrets into talent configs for runtime use
+        self._inject_secrets()
 
         # 4. Notification callback (set by bridge for talents that need it)
         self.notify_callback = None
@@ -159,7 +161,15 @@ class TalonAssistant:
 
     def _scrub_plaintext_secrets(self, config_dir):
         """One-time migration: move any plaintext passwords already in
-        talents.json into the keyring and replace with empty strings."""
+        talents.json into the keyring and replace with empty strings.
+
+        Only scrubs if the keyring write actually succeeds — never
+        deletes plaintext without confirming it's safely stored.
+        """
+        if not self.credential_store.available:
+            print("   [Credentials] Keyring unavailable, skipping plaintext scrub")
+            return
+
         config_path = os.path.join(config_dir, "talents.json")
         try:
             with open(config_path, 'r') as f:
@@ -181,11 +191,16 @@ class TalonAssistant:
             for key in password_keys:
                 value = tcfg.get(key, "")
                 if value:
-                    # Move to keyring
-                    self.credential_store.store_secret(talent.name, key, value)
-                    tcfg[key] = ""
-                    dirty = True
-                    print(f"   [Credentials] Scrubbed plaintext {talent.name}.{key}")
+                    # Only scrub if keyring write succeeds
+                    stored = self.credential_store.store_secret(
+                        talent.name, key, value)
+                    if stored:
+                        tcfg[key] = ""
+                        dirty = True
+                        print(f"   [Credentials] Scrubbed plaintext {talent.name}.{key}")
+                    else:
+                        print(f"   [Credentials] Keyring write failed, "
+                              f"keeping plaintext for {talent.name}.{key}")
 
         if dirty:
             with open(config_path, 'w') as f:
